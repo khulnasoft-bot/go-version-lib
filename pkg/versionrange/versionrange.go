@@ -183,7 +183,18 @@ func (r Range[T]) Intersect(o Range[T]) Range[T] {
 			if !res.raw {
 				merged = normalize(less, merged)
 			}
-			res.sets = append(res.sets, merged)
+			// drop duplicate disjuncts so repeated intersections (e.g.
+			// during Complement) don't explode combinatorially
+			dup := false
+			for _, e := range res.sets {
+				if sameSet(less, e, merged) {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				res.sets = append(res.sets, merged)
+			}
 		}
 	}
 	res.dropEmpty()

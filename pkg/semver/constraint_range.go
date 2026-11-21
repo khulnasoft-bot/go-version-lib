@@ -75,7 +75,10 @@ func (c constraint) toComparators() ([]versionrange.Comparator[Version], error) 
 func wildcardIndex(v Version) int {
 	segs := []part.Part{v.major, v.minor, v.patch}
 	for i, p := range segs {
-		if p.IsAny() || p.IsEmpty() {
+		// IsAny covers explicit x/*/* and default wildcard empties
+		// (Empty{any:true}); zero-padded empties (Empty{any:false})
+		// compare as 0 and must not be treated as wildcards.
+		if p.IsAny() {
 			return i
 		}
 	}
