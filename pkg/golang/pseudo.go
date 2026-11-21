@@ -1,0 +1,55 @@
+// Package golang provides helpers for Go module pseudo-versions.
+package golang
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// pseudoVersion matches the three pseudo-version forms:
+//
+//	vX.0.0-yyyymmddhhmmss-abcdefabcdef
+//	vX.Y.Z-pre.0.yyyymmddhhmmss-abcdefabcdef
+//	vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdefabcdef
+var pseudoVersion = regexp.MustCompile(`^v\d+\.\d+\.\d+-[0-9A-Za-z.-]*?(\d{14})-([0-9a-f]{12})$`)
+
+// timestamp extracts the commit timestamp from the pseudo-version tail.
+var timestampRe = regexp.MustCompile(`(\d{14})-([0-9a-f]{12})$`)
+
+// IsPseudoVersion reports whether s is a Go module pseudo-version.
+func IsPseudoVersion(s string) bool {
+	return pseudoVersion.MatchString(s)
+}
+
+// PseudoVersion is a parsed pseudo-version.
+type PseudoVersion struct {
+	// Base is the underlying semantic version portion (e.g. "v1.2.4-0" or
+	// "v0.0.0").
+	Base string
+	// Timestamp is the commit time encoded in the version.
+	Timestamp time.Time
+	// Revision is the 12-character commit hash prefix.
+	Revision string
+}
+
+// ParsePseudoVersion parses s and returns its components. It returns an
+// error if s is not a pseudo-version.
+func ParsePseudoVersion(s string) (PseudoVersion, error) {
+	if !IsPseudoVersion(s) {
+		return PseudoVersion{}, fmt.Errorf("not a pseudo-version: %s", s)
+	}
+	m := timestampRe.FindStringSubmatch(s)
+	if m == nil {
+		return PseudoVersion{}, fmt.Errorf("cannot extract timestamp from pseudo-version: %s", s)
+	}
+	ts, err := time.Parse("20060102150405", m[1])
+	if err != nil {
+		return PseudoVersion{}, fmt.Errorf("invalid pseudo-version timestamp: %w", err)
+	}
+	// Base is everything before the timestamp identifier's leading '.' or '-'
+	idx := strings.LastIndex(s, m[1])
+	base := strings.TrimRight(s[:idx], ".-")
+	return PseudoVersion{Base: base, Timestamp: ts, Revision: m[2]}, nil
+}
