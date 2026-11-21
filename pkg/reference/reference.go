@@ -3,7 +3,9 @@ package reference
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/khulnasoft/go-version-lib/pkg/purl"
 )
@@ -43,7 +45,17 @@ type versionEntry struct {
 
 var registry []versionEntry
 
+var (
+	registryMu  sync.Mutex
+	registryGen uint64
+	sortedCache []versionEntry
+	sortedGen   uint64
+)
+
 func Register(typ VersionType, pattern string, parse parserFunc, order int) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	registryGen++
 	for i, entry := range registry {
 		if entry.typ == typ {
 			registry[i] = versionEntry{
@@ -90,6 +102,8 @@ func NewReference(v string) (Reference, error) {
 }
 
 func NewReferenceByType(v string, typ VersionType) (Reference, error) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
 	for _, entry := range registry {
 		if entry.typ == typ {
 			return entry.parse(v)
@@ -98,17 +112,29 @@ func NewReferenceByType(v string, typ VersionType) (Reference, error) {
 	return nil, fmt.Errorf("unknown version type: %s", typ)
 }
 
+// sortedEntries returns the registry sorted by registration order. The sorted
+// view is cached and only rebuilt when the registry changes.
 func sortedEntries() []versionEntry {
-	entries := make([]versionEntry, len(registry))
-	copy(entries, registry)
-	for i := 0; i < len(entries); i++ {
-		for j := i + 1; j < len(entries); j++ {
-			if entries[i].order > entries[j].order {
-				entries[i], entries[j] = entries[j], entries[i]
-			}
-		}
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	if sortedGen != registryGen {
+		sortedCache = make([]versionEntry, len(registry))
+		copy(sortedCache, registry)
+		sort.SliceStable(sortedCache, func(i, j int) bool {
+			return sortedCache[i].order < sortedCache[j].order
+		})
+		sortedGen = registryGen
 	}
-	return entries
+	return sortedCache
+}
+
+// compareDifferentTypes provides a deterministic total order when comparing
+// references from different ecosystems (or mixed purl/ecosystem references).
+func compareDifferentTypes(a, b Reference) int {
+	if c := strings.Compare(string(a.Type()), string(b.Type())); c != 0 {
+		return c
+	}
+	return strings.Compare(a.String(), b.String())
 }
 
 // purlVersionType maps a purl package type to a reference VersionType.
@@ -189,7 +215,7 @@ func (r *purlRef) Version() Reference { return r.ref }
 func comparePurlRef(r *purlRef, other Reference) int {
 	o, ok := other.(*purlRef)
 	if !ok {
-		return strings.Compare(r.String(), other.String())
+		return compareDifferentTypes(r, other)
 	}
 	// Same package identity: compare the ecosystem versions version-aware.
 	if r.purl.Type == o.purl.Type &&

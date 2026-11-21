@@ -103,121 +103,145 @@ type semverRef struct {
 	ver semver.Version
 }
 
-func (r *semverRef) String() string              { return r.ver.String() }
-func (r *semverRef) Compare(other Reference) int { return r.ver.Compare(other.(*semverRef).ver) }
-func (r *semverRef) Equal(other Reference) bool  { return r.ver.Equal(other.(*semverRef).ver) }
-func (r *semverRef) GreaterThan(other Reference) bool {
-	return r.ver.GreaterThan(other.(*semverRef).ver)
+func (r *semverRef) String() string { return r.ver.String() }
+
+func (r *semverRef) Compare(other Reference) int {
+	o, ok := other.(*semverRef)
+	if !ok {
+		return compareDifferentTypes(r, other)
+	}
+	return r.ver.Compare(o.ver)
 }
-func (r *semverRef) LessThan(other Reference) bool { return r.ver.LessThan(other.(*semverRef).ver) }
-func (r *semverRef) GreaterThanOrEqual(other Reference) bool {
-	return r.ver.GreaterThanOrEqual(other.(*semverRef).ver)
-}
-func (r *semverRef) LessThanOrEqual(other Reference) bool {
-	return r.ver.LessThanOrEqual(other.(*semverRef).ver)
-}
-func (r *semverRef) Type() VersionType { return Semver }
+
+func (r *semverRef) Equal(other Reference) bool              { return r.Compare(other) == 0 }
+func (r *semverRef) GreaterThan(other Reference) bool        { return r.Compare(other) > 0 }
+func (r *semverRef) LessThan(other Reference) bool           { return r.Compare(other) < 0 }
+func (r *semverRef) GreaterThanOrEqual(other Reference) bool { return r.Compare(other) >= 0 }
+func (r *semverRef) LessThanOrEqual(other Reference) bool    { return r.Compare(other) <= 0 }
+func (r *semverRef) Type() VersionType                       { return Semver }
 
 type gemRef struct {
 	ver gem.Version
 }
 
-func (r *gemRef) String() string                   { return r.ver.String() }
-func (r *gemRef) Compare(other Reference) int      { return r.ver.Compare(other.(*gemRef).ver) }
-func (r *gemRef) Equal(other Reference) bool       { return r.ver.Equal(other.(*gemRef).ver) }
-func (r *gemRef) GreaterThan(other Reference) bool { return r.ver.GreaterThan(other.(*gemRef).ver) }
-func (r *gemRef) LessThan(other Reference) bool    { return r.ver.LessThan(other.(*gemRef).ver) }
-func (r *gemRef) GreaterThanOrEqual(other Reference) bool {
-	return r.ver.GreaterThanOrEqual(other.(*gemRef).ver)
+func (r *gemRef) String() string { return r.ver.String() }
+
+func (r *gemRef) Compare(other Reference) int {
+	o, ok := other.(*gemRef)
+	if !ok {
+		return compareDifferentTypes(r, other)
+	}
+	return r.ver.Compare(o.ver)
 }
-func (r *gemRef) LessThanOrEqual(other Reference) bool {
-	return r.ver.LessThanOrEqual(other.(*gemRef).ver)
-}
-func (r *gemRef) Type() VersionType { return Gem }
+
+func (r *gemRef) Equal(other Reference) bool              { return r.Compare(other) == 0 }
+func (r *gemRef) GreaterThan(other Reference) bool        { return r.Compare(other) > 0 }
+func (r *gemRef) LessThan(other Reference) bool           { return r.Compare(other) < 0 }
+func (r *gemRef) GreaterThanOrEqual(other Reference) bool { return r.Compare(other) >= 0 }
+func (r *gemRef) LessThanOrEqual(other Reference) bool    { return r.Compare(other) <= 0 }
+func (r *gemRef) Type() VersionType                       { return Gem }
 
 type npmRef struct {
 	ver npm.Version
 }
 
-func (r *npmRef) String() string                   { return r.ver.String() }
-func (r *npmRef) Compare(other Reference) int      { return r.ver.Compare(other.(*npmRef).ver) }
-func (r *npmRef) Equal(other Reference) bool       { return r.ver.Equal(other.(*npmRef).ver) }
-func (r *npmRef) GreaterThan(other Reference) bool { return r.ver.GreaterThan(other.(*npmRef).ver) }
-func (r *npmRef) LessThan(other Reference) bool    { return r.ver.LessThan(other.(*npmRef).ver) }
-func (r *npmRef) GreaterThanOrEqual(other Reference) bool {
-	return r.ver.GreaterThanOrEqual(other.(*npmRef).ver)
+func (r *npmRef) String() string { return r.ver.String() }
+
+func (r *npmRef) Compare(other Reference) int {
+	o, ok := other.(*npmRef)
+	if !ok {
+		return compareDifferentTypes(r, other)
+	}
+	return r.ver.Compare(o.ver)
 }
-func (r *npmRef) LessThanOrEqual(other Reference) bool {
-	return r.ver.LessThanOrEqual(other.(*npmRef).ver)
-}
-func (r *npmRef) Type() VersionType { return NPM }
+
+func (r *npmRef) Equal(other Reference) bool              { return r.Compare(other) == 0 }
+func (r *npmRef) GreaterThan(other Reference) bool        { return r.Compare(other) > 0 }
+func (r *npmRef) LessThan(other Reference) bool           { return r.Compare(other) < 0 }
+func (r *npmRef) GreaterThanOrEqual(other Reference) bool { return r.Compare(other) >= 0 }
+func (r *npmRef) LessThanOrEqual(other Reference) bool    { return r.Compare(other) <= 0 }
+func (r *npmRef) Type() VersionType                       { return NPM }
 
 type pep440Ref struct {
 	ver pep440version.Version
 }
 
-func (r *pep440Ref) String() string              { return r.ver.String() }
-func (r *pep440Ref) Compare(other Reference) int { return r.ver.Compare(other.(*pep440Ref).ver) }
-func (r *pep440Ref) Equal(other Reference) bool  { return r.ver.Equal(other.(*pep440Ref).ver) }
-func (r *pep440Ref) GreaterThan(other Reference) bool {
-	return r.ver.GreaterThan(other.(*pep440Ref).ver)
+func (r *pep440Ref) String() string { return r.ver.String() }
+
+func (r *pep440Ref) Compare(other Reference) int {
+	o, ok := other.(*pep440Ref)
+	if !ok {
+		return compareDifferentTypes(r, other)
+	}
+	return r.ver.Compare(o.ver)
 }
-func (r *pep440Ref) LessThan(other Reference) bool { return r.ver.LessThan(other.(*pep440Ref).ver) }
-func (r *pep440Ref) GreaterThanOrEqual(other Reference) bool {
-	return r.ver.GreaterThanOrEqual(other.(*pep440Ref).ver)
-}
-func (r *pep440Ref) LessThanOrEqual(other Reference) bool {
-	return r.ver.LessThanOrEqual(other.(*pep440Ref).ver)
-}
-func (r *pep440Ref) Type() VersionType { return PEP440 }
+
+func (r *pep440Ref) Equal(other Reference) bool              { return r.Compare(other) == 0 }
+func (r *pep440Ref) GreaterThan(other Reference) bool        { return r.Compare(other) > 0 }
+func (r *pep440Ref) LessThan(other Reference) bool           { return r.Compare(other) < 0 }
+func (r *pep440Ref) GreaterThanOrEqual(other Reference) bool { return r.Compare(other) >= 0 }
+func (r *pep440Ref) LessThanOrEqual(other Reference) bool    { return r.Compare(other) <= 0 }
+func (r *pep440Ref) Type() VersionType                       { return PEP440 }
 
 type debRef struct {
 	ver debversion.Version
 }
 
-func (r *debRef) String() string                   { return r.ver.String() }
-func (r *debRef) Compare(other Reference) int      { return r.ver.Compare(other.(*debRef).ver) }
-func (r *debRef) Equal(other Reference) bool       { return r.ver.Equal(other.(*debRef).ver) }
-func (r *debRef) GreaterThan(other Reference) bool { return r.ver.GreaterThan(other.(*debRef).ver) }
-func (r *debRef) LessThan(other Reference) bool    { return r.ver.LessThan(other.(*debRef).ver) }
-func (r *debRef) GreaterThanOrEqual(other Reference) bool {
-	return r.ver.GreaterThanOrEqual(other.(*debRef).ver)
+func (r *debRef) String() string { return r.ver.String() }
+
+func (r *debRef) Compare(other Reference) int {
+	o, ok := other.(*debRef)
+	if !ok {
+		return compareDifferentTypes(r, other)
+	}
+	return r.ver.Compare(o.ver)
 }
-func (r *debRef) LessThanOrEqual(other Reference) bool {
-	return r.ver.LessThanOrEqual(other.(*debRef).ver)
-}
-func (r *debRef) Type() VersionType { return Deb }
+
+func (r *debRef) Equal(other Reference) bool              { return r.Compare(other) == 0 }
+func (r *debRef) GreaterThan(other Reference) bool        { return r.Compare(other) > 0 }
+func (r *debRef) LessThan(other Reference) bool           { return r.Compare(other) < 0 }
+func (r *debRef) GreaterThanOrEqual(other Reference) bool { return r.Compare(other) >= 0 }
+func (r *debRef) LessThanOrEqual(other Reference) bool    { return r.Compare(other) <= 0 }
+func (r *debRef) Type() VersionType                       { return Deb }
 
 type rpmRef struct {
 	ver rpmversion.Version
 }
 
-func (r *rpmRef) String() string                   { return r.ver.String() }
-func (r *rpmRef) Compare(other Reference) int      { return r.ver.Compare(other.(*rpmRef).ver) }
-func (r *rpmRef) Equal(other Reference) bool       { return r.ver.Equal(other.(*rpmRef).ver) }
-func (r *rpmRef) GreaterThan(other Reference) bool { return r.ver.GreaterThan(other.(*rpmRef).ver) }
-func (r *rpmRef) LessThan(other Reference) bool    { return r.ver.LessThan(other.(*rpmRef).ver) }
-func (r *rpmRef) GreaterThanOrEqual(other Reference) bool {
-	return r.ver.GreaterThanOrEqual(other.(*rpmRef).ver)
+func (r *rpmRef) String() string { return r.ver.String() }
+
+func (r *rpmRef) Compare(other Reference) int {
+	o, ok := other.(*rpmRef)
+	if !ok {
+		return compareDifferentTypes(r, other)
+	}
+	return r.ver.Compare(o.ver)
 }
-func (r *rpmRef) LessThanOrEqual(other Reference) bool {
-	return r.ver.LessThanOrEqual(other.(*rpmRef).ver)
-}
-func (r *rpmRef) Type() VersionType { return RPM }
+
+func (r *rpmRef) Equal(other Reference) bool              { return r.Compare(other) == 0 }
+func (r *rpmRef) GreaterThan(other Reference) bool        { return r.Compare(other) > 0 }
+func (r *rpmRef) LessThan(other Reference) bool           { return r.Compare(other) < 0 }
+func (r *rpmRef) GreaterThanOrEqual(other Reference) bool { return r.Compare(other) >= 0 }
+func (r *rpmRef) LessThanOrEqual(other Reference) bool    { return r.Compare(other) <= 0 }
+func (r *rpmRef) Type() VersionType                       { return RPM }
 
 type mvnRef struct {
 	ver mvnversion.Version
 }
 
-func (r *mvnRef) String() string                   { return r.ver.String() }
-func (r *mvnRef) Compare(other Reference) int      { return r.ver.Compare(other.(*mvnRef).ver) }
-func (r *mvnRef) Equal(other Reference) bool       { return r.ver.Equal(other.(*mvnRef).ver) }
-func (r *mvnRef) GreaterThan(other Reference) bool { return r.ver.GreaterThan(other.(*mvnRef).ver) }
-func (r *mvnRef) LessThan(other Reference) bool    { return r.ver.LessThan(other.(*mvnRef).ver) }
-func (r *mvnRef) GreaterThanOrEqual(other Reference) bool {
-	return r.ver.GreaterThanOrEqual(other.(*mvnRef).ver)
+func (r *mvnRef) String() string { return r.ver.String() }
+
+func (r *mvnRef) Compare(other Reference) int {
+	o, ok := other.(*mvnRef)
+	if !ok {
+		return compareDifferentTypes(r, other)
+	}
+	return r.ver.Compare(o.ver)
 }
-func (r *mvnRef) LessThanOrEqual(other Reference) bool {
-	return r.ver.LessThanOrEqual(other.(*mvnRef).ver)
-}
-func (r *mvnRef) Type() VersionType { return Maven }
+
+func (r *mvnRef) Equal(other Reference) bool              { return r.Compare(other) == 0 }
+func (r *mvnRef) GreaterThan(other Reference) bool        { return r.Compare(other) > 0 }
+func (r *mvnRef) LessThan(other Reference) bool           { return r.Compare(other) < 0 }
+func (r *mvnRef) GreaterThanOrEqual(other Reference) bool { return r.Compare(other) >= 0 }
+func (r *mvnRef) LessThanOrEqual(other Reference) bool    { return r.Compare(other) <= 0 }
+func (r *mvnRef) Type() VersionType                       { return Maven }

@@ -232,3 +232,20 @@ func TestRefTypeAllMethods(t *testing.T) {
 	assert.True(t, mvnRef.LessThanOrEqual(mvnRef))
 	assert.Equal(t, "1.0", mvnRef.String())
 }
+
+func TestCompareAcrossTypes(t *testing.T) {
+	// Comparing references from different ecosystems must not panic and must
+	// produce a deterministic, antisymmetric ordering.
+	a, err := reference.NewReferenceByType("1.2.3", reference.Semver)
+	require.NoError(t, err)
+	b, err := reference.NewReferenceByType("1.0.a", reference.Gem)
+	require.NoError(t, err)
+	c, err := reference.NewReference("pkg:npm/lodash@4.17.21")
+	require.NoError(t, err)
+
+	for _, pair := range [][2]reference.Reference{{a, b}, {b, a}, {a, c}, {c, b}} {
+		assert.Equal(t, -pair[0].Compare(pair[1]), pair[1].Compare(pair[0]))
+	}
+	assert.NotEqual(t, 0, a.Compare(b))
+	assert.False(t, a.Equal(b))
+}

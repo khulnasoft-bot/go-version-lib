@@ -5,8 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/go-version-lib/pkg/part"
 	"github.com/khulnasoft/go-version-lib/pkg/semver"
 )
@@ -77,7 +75,7 @@ func NewConstraints(v string, opts ...ConstraintOption) (Constraints, error) {
 	for _, vv := range strings.Split(v, "||") {
 		// Validate the segment
 		if !validConstraintRegexp.MatchString(vv) {
-			return Constraints{}, xerrors.Errorf("improper constraint: %s", vv)
+			return Constraints{}, fmt.Errorf("improper constraint: %s", vv)
 		}
 
 		ss := constraintRegexp.FindAllString(vv, -1)
@@ -113,7 +111,7 @@ func newConstraint(c string) (constraint, error) {
 
 	m := constraintRegexp.FindStringSubmatch(c)
 	if m == nil {
-		return constraint{}, xerrors.Errorf("improper constraint: %s", c)
+		return constraint{}, fmt.Errorf("improper constraint: %s", c)
 	}
 
 	major := m[3]

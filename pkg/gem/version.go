@@ -1,10 +1,9 @@
 package gem
 
 import (
+	"errors"
 	"regexp"
 	"strings"
-
-	"golang.org/x/xerrors"
 
 	"github.com/khulnasoft/go-version-lib/pkg/part"
 )
@@ -15,7 +14,7 @@ var (
 	segmentRegexp *regexp.Regexp
 
 	// ErrInvalidSemVer is returned when a given version is invalid
-	ErrInvalidVersion = xerrors.New("invalid gem version")
+	ErrInvalidVersion = errors.New("invalid gem version")
 )
 
 const (
