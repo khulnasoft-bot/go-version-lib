@@ -13,14 +13,23 @@ import (
 //	vX.0.0-yyyymmddhhmmss-abcdefabcdef
 //	vX.Y.Z-pre.0.yyyymmddhhmmss-abcdefabcdef
 //	vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdefabcdef
-var pseudoVersion = regexp.MustCompile(`^v\d+\.\d+\.\d+-[0-9A-Za-z.-]*?(\d{14})-([0-9a-f]{12})$`)
+var pseudoVersion = regexp.MustCompile(`^v\d+\.\d+\.\d+-(?:\d{14}-[0-9a-f]{12}|(?:[0-9A-Za-z-]+\.)*0\.\d{14}-[0-9a-f]{12})$`)
 
 // timestamp extracts the commit timestamp from the pseudo-version tail.
 var timestampRe = regexp.MustCompile(`(\d{14})-([0-9a-f]{12})$`)
 
-// IsPseudoVersion reports whether s is a Go module pseudo-version.
+// IsPseudoVersion reports whether s is a Go module pseudo-version. The
+// embedded timestamp must be a valid calendar time.
 func IsPseudoVersion(s string) bool {
-	return pseudoVersion.MatchString(s)
+	if !pseudoVersion.MatchString(s) {
+		return false
+	}
+	m := timestampRe.FindStringSubmatch(s)
+	if m == nil {
+		return false
+	}
+	_, err := time.Parse("20060102150405", m[1])
+	return err == nil
 }
 
 // PseudoVersion is a parsed pseudo-version.

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var versionRegex = regexp.MustCompile(`^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$`)
+var versionRegex = regexp.MustCompile(`^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$`)
 
 // Version is a NuGet package version.
 type Version struct {
@@ -82,19 +82,43 @@ func (v Version) Compare(o Version) int {
 // compare numerically and sort before alphanumeric ones; alphanumeric
 // identifiers compare lexically (case-insensitive); a shorter prefix sorts
 // first.
+func isNumericIdent(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func comparePrerelease(a, b string) int {
 	as, bs := strings.Split(a, "."), strings.Split(b, ".")
 	for i := 0; i < len(as) && i < len(bs); i++ {
-		an, aerr := strconv.ParseUint(as[i], 10, 64)
-		bn, berr := strconv.ParseUint(bs[i], 10, 64)
-		switch {
-		case aerr == nil && berr == nil:
-			if an != bn {
-				if an < bn {
+		if isNumericIdent(as[i]) && isNumericIdent(bs[i]) {
+			// compare by numeric value without a uint64 limit: longer
+			// digit strings (after trimming zeros) are larger
+			an, bn := strings.TrimLeft(as[i], "0"), strings.TrimLeft(bs[i], "0")
+			if len(an) != len(bn) {
+				if len(an) < len(bn) {
 					return -1
 				}
 				return 1
 			}
+			if an != bn {
+				return strings.Compare(an, bn)
+			}
+			continue
+		}
+		_, aerr := strconv.ParseUint(as[i], 10, 64)
+		_, berr := strconv.ParseUint(bs[i], 10, 64)
+		switch {
+		case isNumericIdent(as[i]):
+			return -1
+		case isNumericIdent(bs[i]):
+			return 1
 		case aerr == nil:
 			return -1
 		case berr == nil:

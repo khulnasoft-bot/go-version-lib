@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/khulnasoft/go-version-lib/pkg/golang"
 	"github.com/khulnasoft/go-version-lib/pkg/purl"
 )
 
@@ -129,13 +130,20 @@ func DetectAll(v string) []VersionType {
 
 func NewReferenceByType(v string, typ VersionType) (Reference, error) {
 	registryMu.Lock()
-	defer registryMu.Unlock()
+	var parse parserFunc
 	for _, entry := range registry {
 		if entry.typ == typ {
-			return entry.parse(v)
+			parse = entry.parse
+			break
 		}
 	}
-	return nil, fmt.Errorf("unknown version type: %s", typ)
+	registryMu.Unlock()
+	if parse == nil {
+		return nil, fmt.Errorf("unknown version type: %s", typ)
+	}
+	// invoke the parser outside the lock: a registered parser may itself
+	// call back into the registry
+	return parse(v)
 }
 
 // sortedEntries returns the registry sorted by registration order. The sorted
@@ -218,6 +226,12 @@ func newPurlReference(s string) (Reference, error) {
 	t := purlVersionType(p.Type)
 	if t == Unknown {
 		return nil, fmt.Errorf("unknown package type: %s", p.Type)
+	}
+	if t == GoPseudo && !golang.IsPseudoVersion(p.Version) {
+		// ordinary tagged Go releases are not pseudo-versions; Go module
+		// versions carry a "v" prefix that semver.Parse rejects
+		t = Semver
+		p.Version = strings.TrimPrefix(p.Version, "v")
 	}
 	ref, err := NewReferenceByType(p.Version, t)
 	if err != nil {

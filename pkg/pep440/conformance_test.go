@@ -60,6 +60,7 @@ func TestPep440Normalization(t *testing.T) {
 			b, err := pep440version.Parse(p[1])
 			require.NoError(t, err)
 			assert.Equal(t, 0, a.Compare(b), "%s should equal %s", p[0], p[1])
+			assert.Equal(t, 0, b.Compare(a), "%s should equal %s (reverse)", p[1], p[0])
 		})
 	}
 }

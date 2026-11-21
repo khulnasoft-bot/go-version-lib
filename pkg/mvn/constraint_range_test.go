@@ -18,7 +18,7 @@ func TestToVersionRangeChecksParity(t *testing.T) {
 		"!=1.5.0",
 		">=1.0.0 || <0.5.0",
 	}
-	versions := []string{"0.4.0", "0.5.0", "1.0.0", "1.2.3", "1.2.4", "1.3.0", "1.9.9", "2.0.0", "2.5.0"}
+	versions := []string{"0.4.0", "0.5.0", "1.0.0", "1.2.3", "1.2.4", "1.3.0", "1.9.9", "1.5.0", "2.0.0", "2.5.0"}
 
 	for _, cs := range constraints {
 		t.Run(cs, func(t *testing.T) {

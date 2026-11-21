@@ -17,7 +17,11 @@ import (
 // "===" (arbitrary equality) is not representable as a version comparison
 // and also returns an error.
 func (ss Specifiers) ToVersionRange() (versionrange.Range[Version], error) {
-	less := func(a, b Version) int { return a.Compare(b) }
+	// Specifiers.Check strips the candidate's local segment by default;
+	// mirror that here so range satisfaction agrees with Check.
+	less := func(a, b Version) int {
+		return comparePublic(a, b)
+	}
 	var sets []versionrange.Set[Version]
 	for _, group := range ss.specifiers {
 		var cmps []versionrange.Comparator[Version]
@@ -31,6 +35,20 @@ func (ss Specifiers) ToVersionRange() (versionrange.Range[Version], error) {
 		sets = append(sets, versionrange.NewSet(cmps...))
 	}
 	return versionrange.New(less, sets...), nil
+}
+
+// comparePublic compares two versions with local segments stripped, matching
+// the default behavior of Specifiers.Check.
+func comparePublic(a, b Version) int {
+	ap, err := Parse(a.Public())
+	if err != nil {
+		return a.Compare(b)
+	}
+	bp, err := Parse(b.Public())
+	if err != nil {
+		return a.Compare(b)
+	}
+	return ap.Compare(bp)
 }
 
 func (s specifier) toComparators() ([]versionrange.Comparator[Version], error) {

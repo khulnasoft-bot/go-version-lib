@@ -56,8 +56,11 @@ type Set[T any] struct {
 	empty bool
 }
 
-// Comparators returns the set's comparators (nil for the universal set).
-func (s Set[T]) Comparators() []Comparator[T] { return s.cmps }
+// Comparators returns a copy of the set's comparators (nil for the
+// universal set).
+func (s Set[T]) Comparators() []Comparator[T] {
+	return append([]Comparator[T](nil), s.cmps...)
+}
 
 // Empty reports whether the set is unsatisfiable.
 func (s Set[T]) Empty() bool { return s.empty }
@@ -95,14 +98,22 @@ func NewRange[T any](less Less[T], sets ...Set[T]) Range[T] { return New(less, s
 // Less returns the ordering function used by this range.
 func (r Range[T]) Less() Less[T] { return r.less }
 
-// Sets returns the normalized disjuncts of this range.
-func (r Range[T]) Sets() []Set[T] { return r.sets }
+// Sets returns a copy of the normalized disjuncts of this range.
+func (r Range[T]) Sets() []Set[T] {
+	out := make([]Set[T], len(r.sets))
+	for i, s := range r.sets {
+		out[i] = Set[T]{cmps: append([]Comparator[T](nil), s.cmps...), empty: s.empty}
+	}
+	return out
+}
 
 // IsEmpty reports whether the range matches no version at all.
 func (r Range[T]) IsEmpty() bool { return len(r.sets) == 0 }
 
 // Intersect returns the intersection of two ranges: versions must satisfy at
-// least one set from each range.
+// least one set from each range. Both ranges must use the same ordering
+// function for T; when they differ, r's ordering is used and the result may
+// be incorrect.
 func (r Range[T]) Intersect(o Range[T]) Range[T] {
 	less := r.less
 	if less == nil {
@@ -417,6 +428,9 @@ func (r Range[T]) String() string {
 func Parse[T any](s string, less Less[T], parse func(string) (T, error)) (Range[T], error) {
 	var sets []Set[T]
 	for _, part := range strings.Split(s, "||") {
+		if strings.TrimSpace(part) == "" {
+			return Range[T]{}, fmt.Errorf("empty disjunct in range %q", s)
+		}
 		cmps, err := parseSet(part, parse)
 		if err != nil {
 			return Range[T]{}, err
@@ -450,6 +464,9 @@ func parseSet[T any](s string, parse func(string) (T, error)) ([]Comparator[T], 
 			return nil, fmt.Errorf("empty comparator in %q", s)
 		}
 		if vs == "*" || vs == "x" || vs == "X" {
+			if op != OpEQ {
+				return nil, fmt.Errorf("wildcard %q cannot be used with operator %s", vs, op)
+			}
 			// wildcard alone is the universal set
 			continue
 		}

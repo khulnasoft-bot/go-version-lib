@@ -6,6 +6,7 @@ import (
 	cargoversion "github.com/khulnasoft/go-version-lib/pkg/cargo"
 	debversion "github.com/khulnasoft/go-version-lib/pkg/deb"
 	"github.com/khulnasoft/go-version-lib/pkg/gem"
+	"github.com/khulnasoft/go-version-lib/pkg/golang"
 	hexversion "github.com/khulnasoft/go-version-lib/pkg/hex"
 	mvnversion "github.com/khulnasoft/go-version-lib/pkg/mvn"
 	"github.com/khulnasoft/go-version-lib/pkg/npm"
@@ -118,11 +119,14 @@ func init() {
 	}, nugetOrder)
 
 	Register(GoPseudo, goPseudoRegex, func(v string) (Reference, error) {
+		if _, err := golang.ParsePseudoVersion(v); err != nil {
+			return nil, err
+		}
 		ver, err := semver.Parse(strings.TrimPrefix(v, "v"))
 		if err != nil {
 			return nil, err
 		}
-		return &goPseudoRef{ver}, nil
+		return &goPseudoRef{ver: ver, original: v}, nil
 	}, goPseudoOrder)
 }
 
@@ -152,7 +156,7 @@ var mavenRegex = `^[0-9A-Za-z\-~_\.\+]+$`
 
 var nugetRegex = `^[0-9]+(\.[0-9]+){0,3}(-[0-9A-Za-z.-]+)?$`
 
-var goPseudoRegex = `^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]*[0-9]{14}-[0-9a-f]{12}$`
+var goPseudoRegex = `^v[0-9]+\.[0-9]+\.[0-9]+-(?:[0-9]{14}-[0-9a-f]{12}|(?:[0-9A-Za-z-]+\.)*0\.[0-9]{14}-[0-9a-f]{12})$`
 
 type semverRef struct {
 	ver semver.Version
@@ -386,10 +390,11 @@ func (r *nugetRef) LessThanOrEqual(other Reference) bool    { return r.Compare(o
 func (r *nugetRef) Type() VersionType                       { return NuGet }
 
 type goPseudoRef struct {
-	ver semver.Version
+	ver      semver.Version
+	original string
 }
 
-func (r *goPseudoRef) String() string { return r.ver.String() }
+func (r *goPseudoRef) String() string { return r.original }
 
 func (r *goPseudoRef) Compare(other Reference) int {
 	o, ok := other.(*goPseudoRef)
