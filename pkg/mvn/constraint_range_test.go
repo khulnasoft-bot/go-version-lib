@@ -36,3 +36,19 @@ func TestToVersionRangeChecksParity(t *testing.T) {
 		})
 	}
 }
+
+// Maven's ordering is non-transitive for qualifier versions; bound merging
+// must not drop predicates that Check enforces.
+func TestToVersionRangeNonTransitiveBounds(t *testing.T) {
+	c, err := mvnversion.NewConstraints(">1-rc >1.sp")
+	require.NoError(t, err)
+	r, err := c.ToVersionRange()
+	require.NoError(t, err)
+
+	// 1.sp.1 is >1.sp but <1-rc: Check rejects it, so the range must too
+	for _, vs := range []string{"1.sp.1", "1-rc.1", "2.0"} {
+		v, err := mvnversion.NewVersion(vs)
+		require.NoError(t, err)
+		assert.Equal(t, c.Check(v), r.Satisfies(v), vs)
+	}
+}

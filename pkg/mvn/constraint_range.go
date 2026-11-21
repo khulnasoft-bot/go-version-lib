@@ -22,7 +22,10 @@ func (cs Constraints) ToVersionRange() (versionrange.Range[Version], error) {
 		}
 		sets = append(sets, versionrange.NewSet(cmps...))
 	}
-	return versionrange.New(less, sets...), nil
+	// Maven's ComparableVersion ordering is not a strict weak order
+	// (e.g. 1.sp < 1-rc < 1 < 1.sp), so bound merging in New could drop
+	// predicates that Check still enforces. Keep comparators verbatim.
+	return versionrange.NewRaw(less, sets...), nil
 }
 
 func (c constraint) toComparators() ([]versionrange.Comparator[Version], error) {

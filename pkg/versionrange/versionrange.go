@@ -80,6 +80,10 @@ func Universal[T any]() Set[T] { return Set[T]{} }
 type Range[T any] struct {
 	less Less[T]
 	sets []Set[T]
+	// raw disables bound merging/normalization. It is required when less is
+	// not a strict weak order (e.g. Maven's ComparableVersion, which is
+	// non-transitive for qualifier versions like 1.sp vs 1-rc).
+	raw bool
 }
 
 // New returns a Range over the given sets, normalized: unsatisfiable sets are
@@ -127,6 +131,19 @@ func sameSet[T any](less Less[T], a, b Set[T]) bool {
 	return true
 }
 
+// NewRaw returns a Range that stores each set's comparators verbatim,
+// without merging bounds or detecting contradictions. Use it when less is
+// not a strict weak order, where normalization could change semantics.
+// Intersect, Union, and Complement preserve the raw mode.
+func NewRaw[T any](less Less[T], sets ...Set[T]) Range[T] {
+	r := Range[T]{less: less, raw: true}
+	for _, s := range sets {
+		r.sets = append(r.sets, s)
+	}
+	r.dropEmpty()
+	return r
+}
+
 // NewRange is an alias for New, kept for readability at call sites.
 func NewRange[T any](less Less[T], sets ...Set[T]) Range[T] { return New(less, sets...) }
 
@@ -156,13 +173,17 @@ func (r Range[T]) Intersect(o Range[T]) Range[T] {
 	if less == nil {
 		less = o.less
 	}
-	res := Range[T]{less: less}
+	res := Range[T]{less: less, raw: r.raw || o.raw}
 	for _, a := range r.sets {
 		for _, b := range o.sets {
 			cmps := make([]Comparator[T], 0, len(a.cmps)+len(b.cmps))
 			cmps = append(cmps, a.cmps...)
 			cmps = append(cmps, b.cmps...)
-			res.sets = append(res.sets, normalize(less, Set[T]{cmps: cmps}))
+			merged := Set[T]{cmps: cmps}
+			if !res.raw {
+				merged = normalize(less, merged)
+			}
+			res.sets = append(res.sets, merged)
 		}
 	}
 	res.dropEmpty()
@@ -176,11 +197,13 @@ func (r Range[T]) Union(o Range[T]) Range[T] {
 	if less == nil {
 		less = o.less
 	}
-	res := Range[T]{less: less, sets: make([]Set[T], 0, len(r.sets)+len(o.sets))}
+	res := Range[T]{less: less, raw: r.raw || o.raw, sets: make([]Set[T], 0, len(r.sets)+len(o.sets))}
 	res.sets = append(res.sets, r.sets...)
 	res.sets = append(res.sets, o.sets...)
-	for i, s := range res.sets {
-		res.sets[i] = normalize(less, s)
+	if !res.raw {
+		for i, s := range res.sets {
+			res.sets[i] = normalize(less, s)
+		}
 	}
 	res.dropEmpty()
 	return res
@@ -218,6 +241,7 @@ func (r Range[T]) Complement() Range[T] {
 	for _, s := range r.sets {
 		var neg Range[T]
 		neg.less = r.less
+		neg.raw = r.raw
 		if s.empty {
 			// an empty set contributes nothing to the union, so its
 			// complement is universal — skip it in the intersection
