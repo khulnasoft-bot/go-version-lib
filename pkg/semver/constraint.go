@@ -60,6 +60,7 @@ type Constraints struct {
 type constraint struct {
 	version  Version
 	operator operatorFunc
+	op       string
 	original string
 }
 
@@ -112,6 +113,7 @@ func newConstraint(c string, conf conf) (constraint, error) {
 				preRelease: part.NewParts("*"),
 			},
 			operator: constraintOperators[""],
+			op:       "",
 		}, nil
 	}
 
@@ -140,6 +142,7 @@ func newConstraint(c string, conf conf) (constraint, error) {
 	return constraint{
 		version:  v,
 		operator: constraintOperators[m[1]],
+		op:       m[1],
 		original: c,
 	}, nil
 }
