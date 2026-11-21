@@ -49,6 +49,7 @@ type Constraints [][]constraint
 type constraint struct {
 	version  Version
 	operator operatorFunc
+	op       string
 	original string
 }
 
@@ -95,6 +96,7 @@ func newConstraint(c string) (constraint, error) {
 	return constraint{
 		version:  v,
 		operator: constraintOperators[m[1]],
+		op:       m[1],
 		original: c,
 	}, nil
 }
