@@ -43,10 +43,11 @@ func (c constraint) toComparators() ([]versionrange.Comparator[Version], error) 
 	case "<=", "=<":
 		return cmp(versionrange.OpLE), nil
 	case "~>":
-		return []versionrange.Comparator[Version]{
-			{Op: versionrange.OpGE, Value: c.version},
-			{Op: versionrange.OpLT, Value: c.version.Bump()},
-		}, nil
+		// Check compares the candidate's Release() against Bump(), which
+		// rejects prereleases of the upper bound (e.g. ~>1.2.3 rejects
+		// 1.3.0.pre). A plain <bump comparator would admit them, and the
+		// range model cannot express that exclusion — fail conversion.
+		return nil, fmt.Errorf("~> constraint %q cannot be represented as a version range (prerelease boundary)", c.original)
 	default:
 		return nil, fmt.Errorf("unsupported operator %q", c.op)
 	}

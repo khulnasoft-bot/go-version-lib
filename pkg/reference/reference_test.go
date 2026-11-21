@@ -254,11 +254,11 @@ func TestDetectAll(t *testing.T) {
 	// "1.2.3" matches multiple ecosystem patterns; Detect returns only the
 	// first while DetectAll returns all of them in priority order.
 	all := reference.DetectAll("1.2.3")
-	assert.Contains(t, all, reference.Semver)
-	assert.Contains(t, all, reference.NPM)
-	assert.Contains(t, all, reference.Gem)
-	assert.Contains(t, all, reference.Deb)
-	assert.Equal(t, reference.Semver, all[0])
+	assert.Equal(t, []reference.VersionType{
+		reference.Semver, reference.Gem, reference.NPM, reference.PEP440,
+		reference.Deb, reference.RPM, reference.Maven, reference.Cargo,
+		reference.Pub, reference.Hex, reference.NuGet,
+	}, all)
 
 	first, err := reference.Detect("1.2.3")
 	require.NoError(t, err)

@@ -9,6 +9,7 @@ package versionrange
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // Op is a comparison operator applied to a Comparator's bound value.
@@ -56,8 +57,11 @@ type Set[T any] struct {
 	empty bool
 }
 
-// Comparators returns the set's comparators (nil for the universal set).
-func (s Set[T]) Comparators() []Comparator[T] { return s.cmps }
+// Comparators returns a copy of the set's comparators (nil for the
+// universal set).
+func (s Set[T]) Comparators() []Comparator[T] {
+	return append([]Comparator[T](nil), s.cmps...)
+}
 
 // Empty reports whether the set is unsatisfiable.
 func (s Set[T]) Empty() bool { return s.empty }
@@ -76,6 +80,10 @@ func Universal[T any]() Set[T] { return Set[T]{} }
 type Range[T any] struct {
 	less Less[T]
 	sets []Set[T]
+	// raw disables bound merging/normalization. It is required when less is
+	// not a strict weak order (e.g. Maven's ComparableVersion, which is
+	// non-transitive for qualifier versions like 1.sp vs 1-rc).
+	raw bool
 }
 
 // New returns a Range over the given sets, normalized: unsatisfiable sets are
@@ -83,7 +91,54 @@ type Range[T any] struct {
 func New[T any](less Less[T], sets ...Set[T]) Range[T] {
 	r := Range[T]{less: less}
 	for _, s := range sets {
-		r.sets = append(r.sets, normalize(less, s))
+		ns := normalize(less, s)
+		// drop duplicate disjuncts so Union/Intersect stay compact
+		dup := false
+		for _, e := range r.sets {
+			if sameSet(less, e, ns) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			r.sets = append(r.sets, ns)
+		}
+	}
+	r.dropEmpty()
+	return r
+}
+
+// sameSet reports whether two normalized sets contain equivalent
+// comparators (same operators, pairwise-equal values under less).
+func sameSet[T any](less Less[T], a, b Set[T]) bool {
+	if a.empty != b.empty || len(a.cmps) != len(b.cmps) {
+		return false
+	}
+	used := make([]bool, len(b.cmps))
+	for _, ca := range a.cmps {
+		found := false
+		for j, cb := range b.cmps {
+			if !used[j] && ca.Op == cb.Op && less(ca.Value, cb.Value) == 0 {
+				used[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// NewRaw returns a Range that stores each set's comparators verbatim,
+// without merging bounds or detecting contradictions. Use it when less is
+// not a strict weak order, where normalization could change semantics.
+// Intersect, Union, and Complement preserve the raw mode.
+func NewRaw[T any](less Less[T], sets ...Set[T]) Range[T] {
+	r := Range[T]{less: less, raw: true}
+	for _, s := range sets {
+		r.sets = append(r.sets, s)
 	}
 	r.dropEmpty()
 	return r
@@ -95,26 +150,51 @@ func NewRange[T any](less Less[T], sets ...Set[T]) Range[T] { return New(less, s
 // Less returns the ordering function used by this range.
 func (r Range[T]) Less() Less[T] { return r.less }
 
-// Sets returns the normalized disjuncts of this range.
-func (r Range[T]) Sets() []Set[T] { return r.sets }
+// Sets returns a copy of the normalized disjuncts of this range.
+func (r Range[T]) Sets() []Set[T] {
+	out := make([]Set[T], len(r.sets))
+	for i, s := range r.sets {
+		out[i] = Set[T]{cmps: append([]Comparator[T](nil), s.cmps...), empty: s.empty}
+	}
+	return out
+}
 
-// IsEmpty reports whether the range matches no version at all.
+// IsEmpty reports whether the range has no disjuncts. Note this detects
+// emptiness implied by contradictory ordering bounds; it is not a proof
+// that no value in the domain can satisfy the range.
 func (r Range[T]) IsEmpty() bool { return len(r.sets) == 0 }
 
 // Intersect returns the intersection of two ranges: versions must satisfy at
-// least one set from each range.
+// least one set from each range. Both ranges must use the same ordering
+// function for T; when they differ, r's ordering is used and the result may
+// be incorrect.
 func (r Range[T]) Intersect(o Range[T]) Range[T] {
 	less := r.less
 	if less == nil {
 		less = o.less
 	}
-	res := Range[T]{less: less}
+	res := Range[T]{less: less, raw: r.raw || o.raw}
 	for _, a := range r.sets {
 		for _, b := range o.sets {
 			cmps := make([]Comparator[T], 0, len(a.cmps)+len(b.cmps))
 			cmps = append(cmps, a.cmps...)
 			cmps = append(cmps, b.cmps...)
-			res.sets = append(res.sets, normalize(less, Set[T]{cmps: cmps}))
+			merged := Set[T]{cmps: cmps}
+			if !res.raw {
+				merged = normalize(less, merged)
+			}
+			// drop duplicate disjuncts so repeated intersections (e.g.
+			// during Complement) don't explode combinatorially
+			dup := false
+			for _, e := range res.sets {
+				if sameSet(less, e, merged) {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				res.sets = append(res.sets, merged)
+			}
 		}
 	}
 	res.dropEmpty()
@@ -128,11 +208,13 @@ func (r Range[T]) Union(o Range[T]) Range[T] {
 	if less == nil {
 		less = o.less
 	}
-	res := Range[T]{less: less, sets: make([]Set[T], 0, len(r.sets)+len(o.sets))}
+	res := Range[T]{less: less, raw: r.raw || o.raw, sets: make([]Set[T], 0, len(r.sets)+len(o.sets))}
 	res.sets = append(res.sets, r.sets...)
 	res.sets = append(res.sets, o.sets...)
-	for i, s := range res.sets {
-		res.sets[i] = normalize(less, s)
+	if !res.raw {
+		for i, s := range res.sets {
+			res.sets[i] = normalize(less, s)
+		}
 	}
 	res.dropEmpty()
 	return res
@@ -170,6 +252,7 @@ func (r Range[T]) Complement() Range[T] {
 	for _, s := range r.sets {
 		var neg Range[T]
 		neg.less = r.less
+		neg.raw = r.raw
 		if s.empty {
 			// an empty set contributes nothing to the union, so its
 			// complement is universal — skip it in the intersection
@@ -268,6 +351,10 @@ func normalize[T any](less Less[T], s Set[T]) Set[T] {
 			lowers = append(lowers, c)
 		case OpLT, OpLE:
 			uppers = append(uppers, c)
+		default:
+			// unknown operator: cannot reason about it; treat the
+			// conjunction as unsatisfiable rather than dropping it
+			return Set[T]{empty: true}
 		}
 	}
 
@@ -415,8 +502,14 @@ func (r Range[T]) String() string {
 //
 // Examples: ">=1.2.3 <2.0.0", "1.2.3 || >=2.0.0 <3.0.0", "!=1.5.0"
 func Parse[T any](s string, less Less[T], parse func(string) (T, error)) (Range[T], error) {
+	if strings.TrimSpace(s) == "(empty)" {
+		return New(less), nil
+	}
 	var sets []Set[T]
 	for _, part := range strings.Split(s, "||") {
+		if strings.TrimSpace(part) == "" {
+			return Range[T]{}, fmt.Errorf("empty disjunct in range %q", s)
+		}
 		cmps, err := parseSet(part, parse)
 		if err != nil {
 			return Range[T]{}, err
@@ -430,7 +523,7 @@ var cmpOps = []string{"<=", ">=", "!=", "==", "=", "<", ">"}
 
 func parseSet[T any](s string, parse func(string) (T, error)) ([]Comparator[T], error) {
 	fields := strings.FieldsFunc(s, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == ',' || r == '\n'
+		return unicode.IsSpace(r) || r == ','
 	})
 	// Merge lone operator tokens with the following version token.
 	var tokens []string
@@ -450,6 +543,9 @@ func parseSet[T any](s string, parse func(string) (T, error)) ([]Comparator[T], 
 			return nil, fmt.Errorf("empty comparator in %q", s)
 		}
 		if vs == "*" || vs == "x" || vs == "X" {
+			if op != OpEQ {
+				return nil, fmt.Errorf("wildcard %q cannot be used with operator %s", vs, op)
+			}
 			// wildcard alone is the universal set
 			continue
 		}
