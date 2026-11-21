@@ -9,6 +9,7 @@ package versionrange
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // Op is a comparison operator applied to a Comparator's bound value.
@@ -86,10 +87,44 @@ type Range[T any] struct {
 func New[T any](less Less[T], sets ...Set[T]) Range[T] {
 	r := Range[T]{less: less}
 	for _, s := range sets {
-		r.sets = append(r.sets, normalize(less, s))
+		ns := normalize(less, s)
+		// drop duplicate disjuncts so Union/Intersect stay compact
+		dup := false
+		for _, e := range r.sets {
+			if sameSet(less, e, ns) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			r.sets = append(r.sets, ns)
+		}
 	}
 	r.dropEmpty()
 	return r
+}
+
+// sameSet reports whether two normalized sets contain equivalent
+// comparators (same operators, pairwise-equal values under less).
+func sameSet[T any](less Less[T], a, b Set[T]) bool {
+	if a.empty != b.empty || len(a.cmps) != len(b.cmps) {
+		return false
+	}
+	used := make([]bool, len(b.cmps))
+	for _, ca := range a.cmps {
+		found := false
+		for j, cb := range b.cmps {
+			if !used[j] && ca.Op == cb.Op && less(ca.Value, cb.Value) == 0 {
+				used[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // NewRange is an alias for New, kept for readability at call sites.
@@ -107,7 +142,9 @@ func (r Range[T]) Sets() []Set[T] {
 	return out
 }
 
-// IsEmpty reports whether the range matches no version at all.
+// IsEmpty reports whether the range has no disjuncts. Note this detects
+// emptiness implied by contradictory ordering bounds; it is not a proof
+// that no value in the domain can satisfy the range.
 func (r Range[T]) IsEmpty() bool { return len(r.sets) == 0 }
 
 // Intersect returns the intersection of two ranges: versions must satisfy at
@@ -279,6 +316,10 @@ func normalize[T any](less Less[T], s Set[T]) Set[T] {
 			lowers = append(lowers, c)
 		case OpLT, OpLE:
 			uppers = append(uppers, c)
+		default:
+			// unknown operator: cannot reason about it; treat the
+			// conjunction as unsatisfiable rather than dropping it
+			return Set[T]{empty: true}
 		}
 	}
 
@@ -426,6 +467,9 @@ func (r Range[T]) String() string {
 //
 // Examples: ">=1.2.3 <2.0.0", "1.2.3 || >=2.0.0 <3.0.0", "!=1.5.0"
 func Parse[T any](s string, less Less[T], parse func(string) (T, error)) (Range[T], error) {
+	if strings.TrimSpace(s) == "(empty)" {
+		return New(less), nil
+	}
 	var sets []Set[T]
 	for _, part := range strings.Split(s, "||") {
 		if strings.TrimSpace(part) == "" {
@@ -444,7 +488,7 @@ var cmpOps = []string{"<=", ">=", "!=", "==", "=", "<", ">"}
 
 func parseSet[T any](s string, parse func(string) (T, error)) ([]Comparator[T], error) {
 	fields := strings.FieldsFunc(s, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == ',' || r == '\n'
+		return unicode.IsSpace(r) || r == ','
 	})
 	// Merge lone operator tokens with the following version token.
 	var tokens []string

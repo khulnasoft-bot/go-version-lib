@@ -82,6 +82,13 @@ func (s specifier) toComparators() ([]versionrange.Comparator[Version], error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid specifier version %q: %w", s.original, err)
 	}
+	// Specifiers with an explicit local version ("==1.0+local") compare
+	// the full local segment, while the range's less func strips locals
+	// for ordinary specifiers. The two policies cannot be mixed in one
+	// range, so reject local-version specifiers.
+	if strings.Contains(s.version, "+") {
+		return nil, fmt.Errorf("specifier %q with explicit local version cannot be represented as a version range", s.original)
+	}
 
 	switch s.operator.op {
 	case "", "=", "==":

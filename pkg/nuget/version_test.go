@@ -42,3 +42,21 @@ func TestInvalid(t *testing.T) {
 		assert.Error(t, err, s)
 	}
 }
+
+func TestBuildMetadata(t *testing.T) {
+	a, err := nuget.NewVersion("1.2.3+build.1")
+	require.NoError(t, err)
+	b, err := nuget.NewVersion("1.2.3+build.2")
+	require.NoError(t, err)
+	assert.Equal(t, 0, a.Compare(b))
+	assert.Equal(t, "build.1", a.Metadata())
+	assert.Equal(t, "1.2.3+build.1", a.String())
+}
+
+func TestPrereleaseLeadingZeros(t *testing.T) {
+	_, err := nuget.NewVersion("1.2.3-01")
+	assert.Error(t, err)
+	v, err := nuget.NewVersion("1.2.3-0")
+	require.NoError(t, err)
+	assert.Equal(t, "1.2.3-0", v.String())
+}

@@ -156,7 +156,7 @@ var mavenRegex = `^[0-9A-Za-z\-~_\.\+]+$`
 
 var nugetRegex = `^[0-9]+(\.[0-9]+){0,3}(-[0-9A-Za-z.-]+)?$`
 
-var goPseudoRegex = `^v[0-9]+\.[0-9]+\.[0-9]+-(?:[0-9]{14}-[0-9a-f]{12}|(?:[0-9A-Za-z-]+\.)*0\.[0-9]{14}-[0-9a-f]{12})$`
+var goPseudoRegex = `^v[0-9]+\.[0-9]+\.[0-9]+-(?:[0-9]{14}-[0-9a-f]{12}|(?:[0-9A-Za-z-]+\.)*0\.[0-9]{14}-[0-9a-f]{12})(?:\+incompatible)?$`
 
 type semverRef struct {
 	ver semver.Version

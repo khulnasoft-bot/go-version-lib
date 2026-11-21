@@ -10,12 +10,13 @@ import (
 	"strings"
 )
 
-var versionRegex = regexp.MustCompile(`^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$`)
+var versionRegex = regexp.MustCompile(`^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z.-]+))?$`)
 
 // Version is a NuGet package version.
 type Version struct {
 	parts      [4]uint64
 	prerelease string
+	metadata   string
 	original   string
 }
 
@@ -36,7 +37,15 @@ func NewVersion(s string) (Version, error) {
 		}
 		v.parts[i] = n
 	}
+	if pre := m[5]; pre != "" {
+		for _, ident := range strings.Split(pre, ".") {
+			if isNumericIdent(ident) && len(ident) > 1 && ident[0] == '0' {
+				return Version{}, fmt.Errorf("malformed nuget version %q: numeric prerelease identifier %q has leading zeros", s, ident)
+			}
+		}
+	}
 	v.prerelease = m[5]
+	v.metadata = m[6]
 	v.original = s
 	return v, nil
 }
@@ -55,6 +64,11 @@ func (v Version) String() string { return v.original }
 
 // Prerelease returns the prerelease label, or "" for a release version.
 func (v Version) Prerelease() string { return v.prerelease }
+
+// Metadata returns the build metadata suffix, or "" if none. Build
+// metadata is preserved by String but ignored by Compare, matching NuGet
+// precedence rules.
+func (v Version) Metadata() string { return v.metadata }
 
 // Compare orders versions numerically by release segment, then by
 // prerelease label (a release sorts after any of its prereleases).

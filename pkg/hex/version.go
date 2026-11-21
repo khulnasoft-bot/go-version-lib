@@ -25,9 +25,15 @@ type Constraints = semver.Constraints
 // ConstraintOption configures constraint parsing.
 type ConstraintOption = semver.ConstraintOption
 
-// NewConstraints parses a constraint expression (e.g. ">=1.2.3 <2.0.0").
+// NewConstraints parses a Hex (Mix) requirement expression. It supports
+// "and"/"or" keywords and "~>" pessimistic requirements, translated to
+// semver constraint syntax before parsing.
 func NewConstraints(v string, opts ...ConstraintOption) (Constraints, error) {
-	return semver.NewConstraints(v, opts...)
+	translated, err := translateHexConstraint(v)
+	if err != nil {
+		return Constraints{}, err
+	}
+	return semver.NewConstraints(translated, opts...)
 }
 
 // ToVersionRange lowers constraints to the generic versionrange model.

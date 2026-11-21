@@ -25,9 +25,15 @@ type Constraints = semver.Constraints
 // ConstraintOption configures constraint parsing.
 type ConstraintOption = semver.ConstraintOption
 
-// NewConstraints parses a constraint expression (e.g. ">=1.2.3 <2.0.0").
+// NewConstraints parses a Cargo requirement expression. Bare versions are
+// caret requirements and trailing wildcards ("1.2.*") are supported; the
+// expression is translated to semver constraint syntax before parsing.
 func NewConstraints(v string, opts ...ConstraintOption) (Constraints, error) {
-	return semver.NewConstraints(v, opts...)
+	translated, err := translateCargoConstraint(v)
+	if err != nil {
+		return Constraints{}, err
+	}
+	return semver.NewConstraints(translated, opts...)
 }
 
 // ToVersionRange lowers constraints to the generic versionrange model.

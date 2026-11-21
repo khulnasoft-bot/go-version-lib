@@ -13,10 +13,10 @@ import (
 //	vX.0.0-yyyymmddhhmmss-abcdefabcdef
 //	vX.Y.Z-pre.0.yyyymmddhhmmss-abcdefabcdef
 //	vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdefabcdef
-var pseudoVersion = regexp.MustCompile(`^v\d+\.\d+\.\d+-(?:\d{14}-[0-9a-f]{12}|(?:[0-9A-Za-z-]+\.)*0\.\d{14}-[0-9a-f]{12})$`)
+var pseudoVersion = regexp.MustCompile(`^v\d+\.\d+\.\d+-(?:\d{14}-[0-9a-f]{12}|(?:[0-9A-Za-z-]+\.)*0\.\d{14}-[0-9a-f]{12})(?:\+incompatible)?$`)
 
 // timestamp extracts the commit timestamp from the pseudo-version tail.
-var timestampRe = regexp.MustCompile(`(\d{14})-([0-9a-f]{12})$`)
+var timestampRe = regexp.MustCompile(`(\d{14})-([0-9a-f]{12})(?:\+incompatible)?$`)
 
 // IsPseudoVersion reports whether s is a Go module pseudo-version. The
 // embedded timestamp must be a valid calendar time.
