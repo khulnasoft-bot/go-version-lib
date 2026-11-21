@@ -13,14 +13,19 @@ import (
 type VersionType string
 
 const (
-	Semver  VersionType = "semver"
-	Gem     VersionType = "gem"
-	NPM     VersionType = "npm"
-	PEP440  VersionType = "pep440"
-	Deb     VersionType = "deb"
-	RPM     VersionType = "rpm"
-	Maven   VersionType = "maven"
-	Unknown VersionType = "unknown"
+	Semver   VersionType = "semver"
+	Gem      VersionType = "gem"
+	NPM      VersionType = "npm"
+	PEP440   VersionType = "pep440"
+	Deb      VersionType = "deb"
+	RPM      VersionType = "rpm"
+	Maven    VersionType = "maven"
+	Cargo    VersionType = "cargo"
+	Pub      VersionType = "pub"
+	Hex      VersionType = "hex"
+	NuGet    VersionType = "nuget"
+	GoPseudo VersionType = "go-pseudo"
+	Unknown  VersionType = "unknown"
 )
 
 type Reference interface {
@@ -175,6 +180,16 @@ func purlVersionType(t string) VersionType {
 		return RPM
 	case "semver":
 		return Semver
+	case "cargo":
+		return Cargo
+	case "pub":
+		return Pub
+	case "hex":
+		return Hex
+	case "nuget":
+		return NuGet
+	case "golang":
+		return GoPseudo
 	default:
 		return Unknown
 	}

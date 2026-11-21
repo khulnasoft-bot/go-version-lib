@@ -271,3 +271,34 @@ func TestDetectAll(t *testing.T) {
 	// no matches
 	assert.Empty(t, reference.DetectAll("not a version"))
 }
+
+func TestNewEcosystemReferences(t *testing.T) {
+	cases := []struct {
+		in   string
+		want reference.VersionType
+	}{
+		{"pkg:cargo/serde@1.0.0", reference.Cargo},
+		{"pkg:pub/flutter@1.2.3", reference.Pub},
+		{"pkg:hex/decimal@2.0.0", reference.Hex},
+		{"pkg:nuget/newtonsoft.json@13.0.1", reference.NuGet},
+		{"v0.0.0-20191109021931-daa7c04131f5", reference.GoPseudo},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			ref, err := reference.NewReference(tc.in)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, ref.Type())
+			assert.NotEmpty(t, ref.String())
+			assert.Equal(t, 0, ref.Compare(ref))
+		})
+	}
+}
+
+func TestNuGetReferenceOrdering(t *testing.T) {
+	a, err := reference.NewReferenceByType("1.2.3-alpha", reference.NuGet)
+	require.NoError(t, err)
+	b, err := reference.NewReferenceByType("1.2.3", reference.NuGet)
+	require.NoError(t, err)
+	assert.True(t, a.LessThan(b))
+	assert.True(t, b.GreaterThan(a))
+}
