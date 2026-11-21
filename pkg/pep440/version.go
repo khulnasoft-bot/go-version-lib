@@ -245,8 +245,9 @@ func (v Version) Compare(other Version) int {
 	k1 := v.key
 	k2 := other.key
 
-	k1.release = k1.release.Padding(len(k2.release), part.Zero)
-	k2.release = k2.release.Padding(len(k2.release), part.Zero)
+	n := max(len(k1.release), len(k2.release))
+	k1.release = k1.release.Padding(n, part.Zero)
+	k2.release = k2.release.Padding(n, part.Zero)
 
 	return k1.compare(k2)
 }
