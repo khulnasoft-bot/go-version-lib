@@ -11,11 +11,10 @@ import (
 // ToVersionRange lowers the specifiers to the generic versionrange model,
 // enabling cross-ecosystem range algebra (Intersect, Union, Complement).
 //
-// Prefix specifiers ("==1.4.*") are expanded to >=lower <upper bounds.
-// "~=" is expanded per PEP 440 for plain release versions; versions with
-// epochs, pre/post/dev releases, or local segments return an error.
-// "===" (arbitrary equality) is not representable as a version comparison
-// and also returns an error.
+// Specifiers with an explicit local version ("==1.0+local") and ">"
+// specifiers whose version is not a post-release cannot be represented:
+// PEP 440's post-release exclusion for ">" is not a contiguous interval.
+// "~=" is only supported for plain release versions.
 func (ss Specifiers) ToVersionRange() (versionrange.Range[Version], error) {
 	// Specifiers.Check strips the candidate's local segment by default;
 	// mirror that here so range satisfaction agrees with Check.
@@ -24,15 +23,26 @@ func (ss Specifiers) ToVersionRange() (versionrange.Range[Version], error) {
 	}
 	var sets []versionrange.Set[Version]
 	for _, group := range ss.specifiers {
-		var cmps []versionrange.Comparator[Version]
+		// each specifier lowers to one or more alternative conjunctions;
+		// combine them pairwise (logical AND distributes over OR)
+		alts := [][]versionrange.Comparator[Version]{{}}
 		for _, s := range group {
-			cc, err := s.toComparators()
+			specAlts, err := s.toSets()
 			if err != nil {
 				return versionrange.Range[Version]{}, err
 			}
-			cmps = append(cmps, cc...)
+			var next [][]versionrange.Comparator[Version]
+			for _, a := range alts {
+				for _, b := range specAlts {
+					merged := append(append([]versionrange.Comparator[Version]{}, a...), b...)
+					next = append(next, merged)
+				}
+			}
+			alts = next
 		}
-		sets = append(sets, versionrange.NewSet(cmps...))
+		for _, alt := range alts {
+			sets = append(sets, versionrange.NewSet(alt...))
+		}
 	}
 	return versionrange.New(less, sets...), nil
 }
@@ -51,7 +61,8 @@ func comparePublic(a, b Version) int {
 	return ap.Compare(bp)
 }
 
-func (s specifier) toComparators() ([]versionrange.Comparator[Version], error) {
+// toSets lowers one specifier to alternative conjunctions of comparators.
+func (s specifier) toSets() ([][]versionrange.Comparator[Version], error) {
 	prefix := strings.HasSuffix(s.version, ".*")
 	ver := strings.TrimSuffix(s.version, ".*")
 
@@ -63,46 +74,74 @@ func (s specifier) toComparators() ([]versionrange.Comparator[Version], error) {
 	cmp := func(op versionrange.Op, v Version) []versionrange.Comparator[Version] {
 		return []versionrange.Comparator[Version]{{Op: op, Value: v}}
 	}
+	one := func(cmps ...versionrange.Comparator[Version]) [][]versionrange.Comparator[Version] {
+		return [][]versionrange.Comparator[Version]{cmps}
+	}
 
 	if prefix {
+		if s.operator.op == "!=" {
+			return nil, fmt.Errorf("!= with prefix version %q is not representable as a range", s.original)
+		}
 		lo, hi, err := prefixBounds(ver)
 		if err != nil {
 			return nil, err
 		}
-		if s.operator.op == "!=" {
-			return nil, fmt.Errorf("!= with prefix version %q is not representable as a range", s.original)
-		}
-		return []versionrange.Comparator[Version]{
-			{Op: versionrange.OpGE, Value: lo},
-			{Op: versionrange.OpLT, Value: hi},
-		}, nil
+		return one(
+			versionrange.Comparator[Version]{Op: versionrange.OpGE, Value: lo},
+			versionrange.Comparator[Version]{Op: versionrange.OpLT, Value: hi},
+		), nil
 	}
 
 	v, err := Parse(ver)
 	if err != nil {
 		return nil, fmt.Errorf("invalid specifier version %q: %w", s.original, err)
 	}
-	// Specifiers with an explicit local version ("==1.0+local") compare
-	// the full local segment, while the range's less func strips locals
-	// for ordinary specifiers. The two policies cannot be mixed in one
-	// range, so reject local-version specifiers.
+	// Specifiers with an explicit local version ("==1.0+local") compare the
+	// full local segment, while the range's less func strips locals for
+	// ordinary specifiers. The two policies cannot be mixed in one range.
 	if strings.Contains(s.version, "+") {
 		return nil, fmt.Errorf("specifier %q with explicit local version cannot be represented as a version range", s.original)
 	}
 
 	switch s.operator.op {
 	case "", "=", "==":
-		return cmp(versionrange.OpEQ, v), nil
+		return one(versionrange.Comparator[Version]{Op: versionrange.OpEQ, Value: v}), nil
 	case "!=":
-		return cmp(versionrange.OpNE, v), nil
+		return one(versionrange.Comparator[Version]{Op: versionrange.OpNE, Value: v}), nil
 	case ">":
-		return cmp(versionrange.OpGT, v), nil
+		// Check rejects post-releases of the spec's base version unless the
+		// spec itself is a post-release; that exclusion is not a contiguous
+		// interval and cannot be expressed as bounds.
+		if !v.IsPostRelease() {
+			return nil, fmt.Errorf("specifier %q cannot be represented as a version range (post-release exclusion)", s.original)
+		}
+		return one(versionrange.Comparator[Version]{Op: versionrange.OpGT, Value: v}), nil
 	case "<":
-		return cmp(versionrange.OpLT, v), nil
+		if v.IsPreRelease() {
+			return one(versionrange.Comparator[Version]{Op: versionrange.OpLT, Value: v}), nil
+		}
+		// Check rejects prereleases of the spec's base version. Those occupy
+		// [base.dev0, base), so <spec is (<base.dev0) OR (>=base AND <spec).
+		base := v.BaseVersion()
+		b, err := Parse(base)
+		if err != nil {
+			return nil, err
+		}
+		floor, err := Parse(base + ".dev0")
+		if err != nil {
+			return nil, fmt.Errorf("cannot construct prerelease floor for %q: %w", s.original, err)
+		}
+		return [][]versionrange.Comparator[Version]{
+			cmp(versionrange.OpLT, floor),
+			{
+				{Op: versionrange.OpGE, Value: b},
+				{Op: versionrange.OpLT, Value: v},
+			},
+		}, nil
 	case ">=":
-		return cmp(versionrange.OpGE, v), nil
+		return one(versionrange.Comparator[Version]{Op: versionrange.OpGE, Value: v}), nil
 	case "<=":
-		return cmp(versionrange.OpLE, v), nil
+		return one(versionrange.Comparator[Version]{Op: versionrange.OpLE, Value: v}), nil
 	case "~=":
 		return compatibleBounds(s.original, v)
 	case "===":
@@ -112,9 +151,10 @@ func (s specifier) toComparators() ([]versionrange.Comparator[Version], error) {
 	}
 }
 
-// compatibleBounds expands "~=V.N" into >=V.N <V'.* per PEP 440. Only plain
-// release versions (optionally with an epoch) are supported.
-func compatibleBounds(original string, v Version) ([]versionrange.Comparator[Version], error) {
+// compatibleBounds expands "~=V.N" per PEP 440: >=V.N AND ==prefix.* where
+// prefix drops the last release segment. Only plain release versions are
+// supported.
+func compatibleBounds(original string, v Version) ([][]versionrange.Comparator[Version], error) {
 	if v.IsPreRelease() || v.IsPostRelease() || v.Local() != "" || strings.Contains(original, "!") {
 		return nil, fmt.Errorf("~= with %q is only supported for plain release versions", original)
 	}
@@ -123,37 +163,38 @@ func compatibleBounds(original string, v Version) ([]versionrange.Comparator[Ver
 	if len(segs) < 2 {
 		return nil, fmt.Errorf("~= requires at least two release segments: %q", original)
 	}
-	// drop the last segment and bump the new last one
-	last, err := strconv.Atoi(segs[len(segs)-2])
+	prefix := strings.Join(segs[:len(segs)-1], ".")
+	lo, hi, err := prefixBounds(prefix)
 	if err != nil {
-		return nil, fmt.Errorf("~= with %q is only supported for numeric release segments", original)
+		return nil, err
 	}
-	upper := strings.Join(append(segs[:len(segs)-2], strconv.Itoa(last+1)), ".")
-	hi, err := Parse(upper)
-	if err != nil {
-		return nil, fmt.Errorf("~= upper bound %q: %w", upper, err)
-	}
-	return []versionrange.Comparator[Version]{
-		{Op: versionrange.OpGE, Value: v},
-		{Op: versionrange.OpLT, Value: hi},
+	return [][]versionrange.Comparator[Version]{
+		{
+			{Op: versionrange.OpGE, Value: v},
+			{Op: versionrange.OpGE, Value: lo},
+			{Op: versionrange.OpLT, Value: hi},
+		},
 	}, nil
 }
 
-// prefixBounds expands a "1.4.*"-style prefix into >=lower <upper bounds.
+// prefixBounds expands a "1.4.*"-style prefix into the interval containing
+// exactly the versions whose release prefix matches, including prereleases
+// of the boundary releases: [prefix.dev0, bumped.dev0).
 func prefixBounds(prefix string) (Version, Version, error) {
-	lo, err := Parse(prefix)
-	if err != nil {
-		return Version{}, Version{}, fmt.Errorf("invalid prefix version %q: %w", prefix, err)
-	}
 	segs := strings.Split(prefix, ".")
 	last, err := strconv.Atoi(segs[len(segs)-1])
 	if err != nil {
 		return Version{}, Version{}, fmt.Errorf("non-numeric prefix segment in %q", prefix)
 	}
-	hiStr := strings.Join(append(segs[:len(segs)-1], strconv.Itoa(last+1)), ".")
-	hi, err := Parse(hiStr)
+	lo, err := Parse(prefix + ".dev0")
 	if err != nil {
-		return Version{}, Version{}, fmt.Errorf("invalid prefix upper bound %q: %w", hiStr, err)
+		return Version{}, Version{}, fmt.Errorf("invalid prefix lower bound %q: %w", prefix+".dev0", err)
+	}
+	hiSegs := append([]string(nil), segs[:len(segs)-1]...)
+	hiSegs = append(hiSegs, strconv.Itoa(last+1))
+	hi, err := Parse(strings.Join(hiSegs, ".") + ".dev0")
+	if err != nil {
+		return Version{}, Version{}, fmt.Errorf("invalid prefix upper bound: %w", err)
 	}
 	return lo, hi, nil
 }
