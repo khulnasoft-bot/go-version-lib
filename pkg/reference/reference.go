@@ -101,6 +101,27 @@ func NewReference(v string) (Reference, error) {
 	return nil, fmt.Errorf("no parser matched for version: %s", v)
 }
 
+// DetectAll returns every registered ecosystem whose pattern matches the
+// input, in registration-priority order. Unlike Detect it does not stop at
+// the first match, which is useful when version strings are ambiguous
+// (e.g. "1.2.3" matches semver, npm, gem, and deb patterns).
+func DetectAll(v string) []VersionType {
+	trimmed := strings.TrimSpace(v)
+	if strings.HasPrefix(trimmed, "pkg:") {
+		if t, err := detectPurl(trimmed); err == nil {
+			return []VersionType{t}
+		}
+		return nil
+	}
+	var out []VersionType
+	for _, entry := range sortedEntries() {
+		if entry.regex.MatchString(trimmed) {
+			out = append(out, entry.typ)
+		}
+	}
+	return out
+}
+
 func NewReferenceByType(v string, typ VersionType) (Reference, error) {
 	registryMu.Lock()
 	defer registryMu.Unlock()

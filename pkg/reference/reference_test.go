@@ -249,3 +249,25 @@ func TestCompareAcrossTypes(t *testing.T) {
 	assert.NotEqual(t, 0, a.Compare(b))
 	assert.False(t, a.Equal(b))
 }
+
+func TestDetectAll(t *testing.T) {
+	// "1.2.3" matches multiple ecosystem patterns; Detect returns only the
+	// first while DetectAll returns all of them in priority order.
+	all := reference.DetectAll("1.2.3")
+	assert.Contains(t, all, reference.Semver)
+	assert.Contains(t, all, reference.NPM)
+	assert.Contains(t, all, reference.Gem)
+	assert.Contains(t, all, reference.Deb)
+	assert.Equal(t, reference.Semver, all[0])
+
+	first, err := reference.Detect("1.2.3")
+	require.NoError(t, err)
+	assert.Equal(t, all[0], first)
+
+	// purl input resolves to exactly one type
+	purlAll := reference.DetectAll("pkg:npm/lodash@4.17.21")
+	assert.Equal(t, []reference.VersionType{reference.NPM}, purlAll)
+
+	// no matches
+	assert.Empty(t, reference.DetectAll("not a version"))
+}
